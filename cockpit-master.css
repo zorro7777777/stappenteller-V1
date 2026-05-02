@@ -1,0 +1,548 @@
+/* ═══════════════════════════════════════════════════════════════
+   COCKPIT MASTER CSS  —  v1.0
+   Modulair framework voor Samsung Flip 6 (en andere OLED schermen)
+
+   GEBRUIK IN ELKE APP:
+     <link rel="stylesheet" href="cockpit-master.css">
+
+   OM EEN NIEUWE APP TE MAKEN:
+     1. Kopieer index.html
+     2. Vervang de .instrument-panel inhoud
+     3. Schrijf een nieuwe logic.js
+     cockpit-master.css en app.js blijven ONGEWIJZIGD
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── DESIGN TOKENS ─────────────────────────────────────────────
+   Pas ALLEEN hier kleuren aan voor een nieuw thema.
+   Alle componenten erven automatisch mee.
+   ─────────────────────────────────────────────────────────────── */
+:root {
+  /* Primaire kleuren */
+  --deep-black:   #000000;   /* OLED achtergrond — echte zwart = pixels uit */
+  --glow-green:   #00ff99;   /* Primaire data, instrumenten, GPS-status     */
+  --accent-gold:  #ffcc00;   /* Astronomische/zonne-elementen, solar data   */
+  --home-blue:    #1a5fb4;   /* Thuishaven-indicator en home-functies       */
+
+  /* Afgeleide kleuren — automatisch berekend uit tokens */
+  --panel-bg:        #0a0a0a;
+  --panel-border:    #1a1a1a;
+  --panel-deep:      #050505;
+  --danger-red:      #ff4444;
+  --warn-orange:     #ff9900;
+
+  /* Transparante varianten voor achtergronden */
+  --glow-green-dim:  rgba(0, 255, 153, 0.12);
+  --accent-gold-dim: rgba(255, 204,   0, 0.15);
+  --home-blue-dim:   rgba( 26,  95, 180, 0.15);
+  --danger-red-dim:  rgba(255,  68,  68, 0.10);
+
+  /* Typografie */
+  --font-mono:  'Courier New', Courier, monospace;
+
+  /* Schermlay-out vaste maten */
+  --header-height:  42px;
+  --nav-height:     calc(58px + 1.4cm + env(safe-area-inset-bottom));
+  --nav-padding-b:  calc(1.4cm + env(safe-area-inset-bottom));
+}
+
+/* ── RESET & BASIS ──────────────────────────────────────────────
+   Voorkomt tekst-selectie, context-menu en tap-highlight
+   op alle interactieve elementen (cruciaal op touchscreen)
+   ─────────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout:       none;
+  -webkit-user-select:         none;
+  -moz-user-select:            none;
+  -ms-user-select:             none;
+  user-select:                 none;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden; /* Voorkomt body-scroll; elk panel scrollt zelf */
+}
+
+body {
+  background:  var(--deep-black);
+  color:        #ffffff;
+  font-family:  var(--font-mono);
+  display:      flex;
+  flex-direction: column;
+}
+
+/* ── COCKPIT SHELL LAYOUT ───────────────────────────────────────
+   De drie vaste lagen van elke app:
+     1. .cockpit-header   — GPS-balk, altijd bovenaan
+     2. .cockpit-body     — scrollbaar instrumentengedeelte
+     3. .cockpit-nav      — navigatiebalk, altijd onderaan
+   ─────────────────────────────────────────────────────────────── */
+
+/* 1. HEADER — GPS-status, UTC, tijdzone */
+.cockpit-header {
+  flex-shrink:     0;
+  display:         flex;
+  justify-content: space-between;
+  align-items:     center;
+  height:          var(--header-height);
+  padding:         0 10px;
+  background:      var(--panel-deep);
+  border-bottom:   1px solid #1e1e1e;
+  font-size:       0.70rem;
+  color:           var(--glow-green);
+  gap:             8px;
+  z-index:         10;
+}
+
+.cockpit-header .gps-cluster {
+  display:     flex;
+  align-items: center;
+  gap:         6px;
+  flex-wrap:   wrap;
+}
+
+/* GPS pulse-dot */
+.pulse {
+  width:         10px;
+  height:        10px;
+  border-radius: 50%;
+  background:    var(--danger-red);
+  flex-shrink:   0;
+  transition:    background 0.4s;
+}
+.pulse.online { background: var(--glow-green); }
+
+.blink { animation: blink-anim 1s steps(2, start) infinite; }
+@keyframes blink-anim { to { visibility: hidden; } }
+
+#coords-display   { font-size: 0.70rem; font-weight: bold; }
+#accuracy-display { font-size: 0.75rem; font-weight: bold; color: var(--home-blue); }
+#zone-display     { font-size: 0.65rem; color: var(--glow-green); white-space: nowrap; }
+
+/* 2. BODY — neemt alle resterende ruimte in en scrollt niet zelf */
+.cockpit-body {
+  flex:       1;
+  min-height: 0;       /* Cruciaal voor flex-overflow op Android */
+  position:   relative;
+  overflow:   hidden;
+}
+
+/* 3. NAV-BAR — kleeft altijd onderaan het scherm */
+.cockpit-nav {
+  flex-shrink:    0;
+  display:        grid;
+  /* grid-template-columns wordt dynamisch gezet door app.js
+     op basis van het aantal .nav-item elementen             */
+  background:     var(--panel-deep);
+  border-top:     2px solid var(--glow-green);
+  height:         var(--nav-height);
+  padding-bottom: var(--nav-padding-b);
+  z-index:        10;
+}
+
+.nav-item {
+  display:        flex;
+  flex-direction: column;
+  align-items:    center;
+  justify-content:center;
+  font-size:      0.50rem;
+  color:          #3a3a3a;
+  text-transform: uppercase;
+  font-weight:    bold;
+  cursor:         pointer;
+  border-right:   1px solid #111;
+  padding:        6px 0;
+  transition:     color 0.2s, background 0.2s;
+}
+.nav-item:last-child { border-right: none; }
+.nav-item.active {
+  color:      var(--glow-green);
+  background: var(--glow-green-dim);
+}
+.nav-item:active { filter: brightness(1.5); }
+.nav-icon { font-size: 1.15rem; margin-bottom: 3px; line-height: 1; }
+
+/* ── INSTRUMENT PANELS (TABS) ───────────────────────────────────
+   Elk tab-paneel vult de volledige cockpit-body.
+   Standaard verborgen, zichtbaar via .active klasse.
+   ─────────────────────────────────────────────────────────────── */
+.instrument-panel {
+  position:   absolute;
+  inset:      0;
+  display:    none;
+  flex-direction: column;
+  gap:        8px;
+  padding:    10px 12px 16px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  /* Ruimte onderaan zodat laatste kaart niet onder nav verdwijnt */
+  padding-bottom: 20px;
+}
+.instrument-panel.active { display: flex; }
+
+/* LOG-paneel: aparte scroll-wrapper voor sticky tabelhoofden */
+.instrument-panel.log-panel {
+  padding-bottom: 0;
+  overflow:       hidden;
+}
+.log-scroll-wrap {
+  flex:                     1;
+  overflow-y:               auto;
+  -webkit-overflow-scrolling: touch;
+  min-height:               0;
+  padding-bottom:           80px;
+}
+
+/* ── KAARTEN (CARDS) ────────────────────────────────────────────
+   Universele instrumentkaart — herbruikbaar in elke app
+   ─────────────────────────────────────────────────────────────── */
+.card {
+  background:  var(--panel-bg);
+  border:      1px solid var(--panel-border);
+  border-radius: 3px;
+  padding:     12px;
+}
+.card.gold-accent  { border-left: 3px solid var(--accent-gold); }
+.card.green-accent { border-left: 3px solid var(--glow-green); }
+.card.blue-accent  { border-left: 3px solid var(--home-blue); }
+.card.red-accent   { border-left: 3px solid var(--danger-red); }
+.card.dim-border   { border: 1px dashed #1e1e1e; }
+
+/* ── TYPOGRAFIE ─────────────────────────────────────────────────
+   Consistente label en waarde stijlen over alle apps
+   ─────────────────────────────────────────────────────────────── */
+.c-label {
+  display:        block;
+  font-size:      0.58rem;
+  font-weight:    bold;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color:          var(--glow-green);
+  margin-bottom:  3px;
+}
+.c-label.gold  { color: var(--accent-gold); }
+.c-label.blue  { color: var(--home-blue); }
+
+.c-value-xl {
+  font-size:             2.0rem;
+  font-weight:           bold;
+  font-variant-numeric:  tabular-nums;
+  line-height:           1;
+  color:                 var(--accent-gold);
+}
+.c-value-lg {
+  font-size:             1.4rem;
+  font-weight:           bold;
+  font-variant-numeric:  tabular-nums;
+  color:                 var(--home-blue);
+  line-height:           1;
+}
+.c-value-md {
+  font-size:  1.05rem;
+  font-weight: bold;
+  margin-top:  2px;
+}
+.c-value-sm {
+  font-size:  0.60rem;
+  font-weight: bold;
+  color:       var(--glow-green);
+  margin-top:  2px;
+  opacity:     0.85;
+}
+
+.c-sub {
+  font-size:  0.54rem;
+  font-weight: bold;
+  color:       var(--glow-green);
+  margin-top:  2px;
+  opacity:     0.7;
+}
+
+/* ── GRID HELPERS ───────────────────────────────────────────────
+   Gebruik voor instrument-rijen naast elkaar
+   ─────────────────────────────────────────────────────────────── */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+/* Ephemeriden-box (binnen grid) */
+.eph-box {
+  background:  var(--panel-deep);
+  padding:     10px;
+  border-top:  2px solid var(--accent-gold);
+  border-radius: 2px;
+}
+
+/* Tijdbox (Home dual-view) */
+.time-box {
+  background:    var(--panel-bg);
+  border:        1px solid var(--panel-border);
+  border-radius: 3px;
+  padding:       12px;
+}
+.time-box.solar-box { border-left: 3px solid var(--accent-gold); }
+.time-box.home-box  { border-left: 3px solid var(--home-blue);   }
+
+/* ── ZONNEBOOG (ARC) ────────────────────────────────────────────
+   Canvas-wrapper — grootte wordt bepaald door resizeArc() in logic.js
+   ─────────────────────────────────────────────────────────────── */
+#arc-wrap {
+  position:   relative;
+  width:       100%;
+  flex-shrink: 0;
+  margin-top:  20px;
+}
+#arc-canvas {
+  display: block;
+  width:   100%;
+}
+#arc-legend {
+  display:         flex;
+  justify-content: center;
+  gap:             10px;
+  margin-top:      4px;
+  margin-bottom:   10px;
+  flex-wrap:       wrap;
+}
+.leg-item {
+  display:        flex;
+  align-items:    center;
+  gap:            4px;
+  font-size:      0.48rem;
+  color:          #666;
+  text-transform: uppercase;
+  font-weight:    bold;
+}
+.leg-dot {
+  width:         8px;
+  height:        8px;
+  border-radius: 50%;
+  flex-shrink:   0;
+}
+
+/* ── ADRESBOX ───────────────────────────────────────────────────
+   Italics adres-weergave op Home-tab
+   ─────────────────────────────────────────────────────────────── */
+.address-box {
+  font-size:   0.68rem;
+  color:       #bbb;
+  line-height: 1.5;
+  margin-top:  6px;
+  border-top:  1px solid #1e1e1e;
+  padding-top: 8px;
+  font-style:  italic;
+}
+
+/* ── MAANDLOG TABEL ─────────────────────────────────────────────
+   Sticky kolomhoofden, volledig scrollbaar
+   ─────────────────────────────────────────────────────────────── */
+.log-table-wrap {
+  background:    var(--panel-bg);
+  border:        1px solid var(--panel-border);
+  border-radius: 3px;
+}
+table               { width: 100%; border-collapse: collapse; font-size: 0.60rem; }
+th {
+  color:          var(--glow-green);
+  text-align:     left;
+  padding:        8px 5px;
+  border-bottom:  2px solid var(--glow-green);
+  text-transform: uppercase;
+  position:       sticky;
+  top:            0;
+  background:     #111;
+  z-index:        2;
+}
+td { padding: 7px 5px; border-bottom: 1px solid #111; color: #999; }
+.today-row         { background: var(--glow-green-dim); font-weight: bold; }
+.today-row td      { color: var(--glow-green) !important; }
+
+/* ── CONFIG PANEEL ──────────────────────────────────────────────
+   Herbruikbaar configuratie-instrumentpaneel
+   ─────────────────────────────────────────────────────────────── */
+.cfg-section-title {
+  font-size:      0.58rem;
+  color:          var(--glow-green);
+  font-weight:    bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding-bottom: 4px;
+  border-bottom:  1px solid #1e1e1e;
+  margin-bottom:  4px;
+}
+
+.cfg-info-box {
+  background:    var(--panel-deep);
+  border:        1px solid var(--panel-border);
+  border-left:   3px solid var(--home-blue);
+  padding:       12px;
+  border-radius: 3px;
+  font-size:     0.66rem;
+  line-height:   1.8;
+}
+.cfg-info-box.green-left { border-left-color: var(--glow-green); }
+
+.cfg-row  { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; }
+.cfg-key  { color: #444; font-size: 0.56rem; text-transform: uppercase; }
+.cfg-val  { color: #fff; font-weight: bold; }
+.cfg-val.blue  { color: var(--home-blue); }
+.cfg-val.gold  { color: var(--accent-gold); }
+.cfg-val.green { color: var(--glow-green); }
+
+.cfg-btn {
+  display:        block;
+  width:          100%;
+  background:     var(--glow-green-dim);
+  border:         1px solid var(--glow-green);
+  color:          var(--glow-green);
+  font-family:    var(--font-mono);
+  font-size:      0.68rem;
+  font-weight:    bold;
+  padding:        12px 10px;
+  cursor:         pointer;
+  text-transform: uppercase;
+  border-radius:  3px;
+  text-align:     center;
+  letter-spacing: 1px;
+  margin-top:     6px;
+  transition:     filter 0.15s;
+}
+.cfg-btn:active { filter: brightness(1.6); }
+.cfg-btn.danger {
+  background:  var(--danger-red-dim);
+  border-color: var(--danger-red);
+  color:        var(--danger-red);
+}
+
+.cfg-status {
+  font-size:   0.60rem;
+  padding:     8px 10px;
+  border-radius: 3px;
+  text-align:  center;
+  margin-top:  4px;
+}
+.cfg-status.ok      { background: rgba(0,255,153,0.07);  color: var(--glow-green);  border: 1px solid #0e2e1e; }
+.cfg-status.pending { background: rgba(26,95,180,0.12);  color: var(--home-blue);   border: 1px solid #0e1e3a; }
+.cfg-status.error   { background: rgba(255,68,68,0.08);  color: var(--danger-red);  border: 1px solid #3a0e0e; }
+
+/* ── INFO PANEEL ────────────────────────────────────────────────
+   Meertalige projectbeschrijving
+   ─────────────────────────────────────────────────────────────── */
+.info-lang-toggle {
+  display:    flex;
+  border:     1px solid #2a2a2a;
+  border-radius: 3px;
+  overflow:   hidden;
+  flex-shrink: 0;
+}
+.info-lang-btn {
+  flex:           1;
+  padding:        9px;
+  background:     var(--panel-deep);
+  color:          #444;
+  font-family:    var(--font-mono);
+  font-size:      0.62rem;
+  font-weight:    bold;
+  text-transform: uppercase;
+  cursor:         pointer;
+  border:         none;
+  letter-spacing: 1px;
+  transition:     background 0.2s, color 0.2s;
+}
+.info-lang-btn.active  { background: var(--glow-green-dim); color: var(--glow-green); }
+.info-lang-btn:active  { filter: brightness(1.5); }
+
+.info-block            { display: none; flex-direction: column; gap: 8px; }
+.info-block.active     { display: flex; }
+
+.info-section {
+  background:    var(--panel-bg);
+  border:        1px solid var(--panel-border);
+  border-left:   3px solid var(--accent-gold);
+  padding:       12px;
+  border-radius: 3px;
+}
+.info-section h3 {
+  color:          var(--accent-gold);
+  font-size:      0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin:         0 0 8px 0;
+  font-family:    var(--font-mono);
+}
+.info-section p {
+  color:       #999;
+  font-size:   0.60rem;
+  line-height: 1.85;
+  margin:      0 0 6px 0;
+  font-family: var(--font-mono);
+}
+.info-section p:last-child { margin-bottom: 0; }
+
+.info-feature {
+  display:      flex;
+  align-items:  flex-start;
+  gap:          8px;
+  padding:      6px 0;
+  border-bottom: 1px solid #111;
+  font-size:    0.58rem;
+  color:        #777;
+  line-height:  1.65;
+}
+.info-feature:last-child  { border-bottom: none; }
+.info-feature-icon        { font-size: 1.0rem; flex-shrink: 0; margin-top: 1px; }
+.info-feature-text strong { color: var(--glow-green); display: block; font-size: 0.58rem; text-transform: uppercase; margin-bottom: 1px; }
+
+.info-badge {
+  display:       inline-block;
+  background:    #111;
+  border:        1px solid #2a2a2a;
+  color:         #555;
+  font-size:     0.50rem;
+  padding:       2px 6px;
+  border-radius: 2px;
+  margin:        2px 2px 0 0;
+  font-family:   var(--font-mono);
+  text-transform: uppercase;
+}
+
+.info-version-bar {
+  background:    var(--panel-deep);
+  border:        1px solid var(--panel-border);
+  padding:       10px 12px;
+  border-radius: 3px;
+  display:       flex;
+  justify-content: space-between;
+  align-items:   center;
+}
+.info-version-bar span   { font-size: 0.56rem; color: #333; }
+.info-version-bar strong { font-size: 0.60rem; color: var(--glow-green); }
+
+/* ── UTILITY ────────────────────────────────────────────────────
+   Algemene hulpklassen, in elke app bruikbaar
+   ─────────────────────────────────────────────────────────────── */
+button:active { filter: brightness(1.5); }
+
+.text-gold    { color: var(--accent-gold); }
+.text-green   { color: var(--glow-green); }
+.text-blue    { color: var(--home-blue); }
+.text-red     { color: var(--danger-red); }
+.text-dim     { color: #444; }
+.text-upper   { text-transform: uppercase; }
+.text-mono    { font-family: var(--font-mono); }
+.text-tabnum  { font-variant-numeric: tabular-nums; }
+
+.mt-4  { margin-top:  4px; }
+.mt-8  { margin-top:  8px; }
+.mt-12 { margin-top: 12px; }
+.mb-4  { margin-bottom:  4px; }
+.mb-8  { margin-bottom:  8px; }
+
+/* ── SCROLLBAR VERBERGEN (OLED / AMOLED) ───────────────────────
+   Scrollbar is niet zichtbaar maar scrollen werkt gewoon
+   ─────────────────────────────────────────────────────────────── */
+.instrument-panel::-webkit-scrollbar,
+.log-scroll-wrap::-webkit-scrollbar   { display: none; }
+.instrument-panel, .log-scroll-wrap   { scrollbar-width: none; }
