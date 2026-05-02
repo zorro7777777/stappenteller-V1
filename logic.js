@@ -42,7 +42,7 @@ const DEFAULT_STEP_M   = 0.67;   /* staplengte in meter                     */
 const DEFAULT_WEIGHT   = 75;     /* lichaamsgewicht in kg                   */
 
 /* Snelheidsvenster — identiek aan WaypointAssistent wandelen-profiel */
-const MIN_SPEED_KMH    = 2.5;    /* onder = stilstand                       */
+const MIN_SPEED_KMH    = 0.37;    /* onder = stilstand                       */
 const MAX_SPEED_KMH    = 7.0;    /* boven = geen wandelaar meer             */
 const MIN_SPEED_MS     = MIN_SPEED_KMH / 3.6;
 const MAX_SPEED_MS     = MAX_SPEED_KMH / 3.6;
