@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Stappenteller — Cockpit v2</title>
+    <link rel="manifest"       href="manifest.json">
+    <meta name="theme-color"   content="#000000">
+    <meta name="mobile-web-app-capable"                content="yes">
+    <meta name="apple-mobile-web-app-capable"          content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title"            content="Stappenteller">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="stylesheet" href="cockpit-master.css">
+    <style>
+        /* Gap-indicator: oranje balk bij crow-flies herstel */
+        #gap-indicator {
+            display: none;
+            background: rgba(255,153,0,0.12);
+            border: 1px solid var(--warn-orange);
+            border-left: 3px solid var(--warn-orange);
+            color: var(--warn-orange);
+            font-size: 0.58rem;
+            padding: 8px 10px;
+            border-radius: 3px;
+            font-family: var(--font-mono);
+        }
+        /* Herstel-indicator: groene balk bij crash-herstel */
+        #restored-indicator {
+            display: none;
+            background: rgba(0,255,153,0.08);
+            border: 1px solid var(--glow-green);
+            border-left: 3px solid var(--glow-green);
+            color: var(--glow-green);
+            font-size: 0.58rem;
+            padding: 8px 10px;
+            border-radius: 3px;
+            font-family: var(--font-mono);
+        }
+        /* Hervat-knop na crash-herstel */
+        #resume-btn {
+            display: none;
+            background: rgba(0,255,153,0.1);
+            border: 1px solid var(--glow-green);
+            color: var(--glow-green);
+            font-family: var(--font-mono);
+            font-size: 0.68rem;
+            font-weight: bold;
+            padding: 12px;
+            width: 100%;
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+        #resume-btn:active { filter: brightness(1.5); }
+        /* Gap-stappen subtekst */
+        #session-gap-steps {
+            display: none;
+            font-size: 0.55rem;
+            color: var(--warn-orange);
+            font-style: italic;
+            margin-top: 2px;
+        }
+    </style>
+</head>
+<body>
+
+<header class="cockpit-header">
+    <div class="gps-cluster">
+        <div id="gps-pulse" class="pulse blink"></div>
+        <div id="coords-display">GPS SYNC...</div>
+        <div id="accuracy-display">(+- --m)</div>
+        <!-- Wake Lock indicator -->
+        <div id="wake-lock-indicator" title="Wake Lock actief"
+             style="width:7px;height:7px;border-radius:50%;background:var(--accent-gold);flex-shrink:0;opacity:0.35;"></div>
+    </div>
+    <div id="zone-display">ZONE: UTC --</div>
+</header>
+
+<main class="cockpit-body">
+
+    <!-- HOME — Stappenteller hoofd -->
+    <section id="view-home" class="instrument-panel active">
+
+        <!-- Crash-herstel indicator (verborgen tenzij hersteld) -->
+        <div id="restored-indicator">SESSIE HERSTELD VANUIT ZWARTE DOOS</div>
+        <button id="resume-btn" onclick="startSession()">HERVAT TRACKING</button>
+
+        <!-- Gap indicator (verborgen tenzij crow-flies herstel) -->
+        <div id="gap-indicator"></div>
+
+        <!-- Grote stappen-display -->
+        <div class="card gold-accent" style="text-align:center;padding:20px 12px;">
+            <span class="c-label gold" style="font-size:0.65rem;letter-spacing:2px;">SESSIE STAPPEN</span>
+            <div id="session-steps" style="font-size:3.8rem;font-weight:bold;font-variant-numeric:tabular-nums;color:var(--accent-gold);line-height:1;margin:6px 0;">0</div>
+            <div id="session-dist"  style="font-size:1.1rem;color:var(--glow-green);font-weight:bold;">0 m</div>
+            <div id="session-gap-steps">waarvan ~0 geschat (vogelvlucht)</div>
+        </div>
+
+        <!-- Sessie metrics: 4 vakjes -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div class="eph-box" style="text-align:center;">
+                <span class="c-label" style="font-size:0.5rem;">Duur</span>
+                <div id="session-duration" class="c-value-md text-green">--:--</div>
+            </div>
+            <div class="eph-box" style="text-align:center;">
+                <span class="c-label" style="font-size:0.5rem;">Snelheid</span>
+                <div id="session-speed" class="c-value-md text-gold">--</div>
+            </div>
+            <div class="eph-box" style="text-align:center;">
+                <span class="c-label" style="font-size:0.5rem;">Calorieën</span>
+                <div id="session-kcal" class="c-value-md" style="color:#ff6b6b;">0 kcal</div>
+            </div>
+            <div class="eph-box" style="text-align:center;">
+                <span class="c-label" style="font-size:0.5rem;">Intensiteit</span>
+                <div id="session-met" style="font-size:0.85rem;font-weight:bold;margin-top:2px;color:#555;">MET 1.0</div>
+            </div>
+        </div>
+
+        <!-- Beweeg/pauze tijd -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div class="card" style="border-left:2px solid var(--glow-green);padding:8px 10px;">
+                <span class="c-label" style="color:#444;font-size:0.5rem;">Actief bewogen</span>
+                <div id="session-move-time" style="font-size:0.85rem;color:var(--glow-green);font-weight:bold;font-variant-numeric:tabular-nums;">00:00</div>
+            </div>
+            <div class="card" style="border-left:2px solid #333;padding:8px 10px;">
+                <span class="c-label" style="color:#444;font-size:0.5rem;">Stilstand/pauze</span>
+                <div id="session-pause-time" style="font-size:0.85rem;color:#555;font-weight:bold;font-variant-numeric:tabular-nums;">00:00</div>
+            </div>
+        </div>
+
+        <!-- GPS Status + accumulatie voortgang -->
+        <div class="card" style="border-left:2px solid #222;padding:8px 12px;">
+            <span class="c-label" style="color:#444;margin-bottom:2px;">GPS</span>
+            <div id="step-gps-status" style="font-size:0.60rem;color:#555;">Wachten op GPS...</div>
+            <!-- Accumulatiebalk: toont opgehopte afstand richting de 5m drempel -->
+            <div style="margin-top:6px;">
+                <div style="display:flex;justify-content:space-between;margin-bottom:2px;">
+                    <span style="font-size:0.50rem;color:#333;font-family:var(--font-mono);text-transform:uppercase;">Accumulatie</span>
+                    <span id="accum-txt" style="font-size:0.50rem;color:#555;font-family:var(--font-mono);"></span>
+                </div>
+                <div style="background:#111;height:4px;border-radius:2px;overflow:hidden;">
+                    <div id="accum-bar" style="height:100%;width:0%;background:var(--home-blue);border-radius:2px;transition:width 0.3s;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- WISSELKNOP: START → PAUZE → HERVAT -->
+        <button id="session-toggle-btn" onclick="toggleSession()"
+                style="display:block;width:100%;background:rgba(0,255,153,0.12);border:2px solid var(--glow-green);color:var(--glow-green);font-family:var(--font-mono);font-size:0.9rem;font-weight:bold;padding:18px;cursor:pointer;text-transform:uppercase;border-radius:3px;text-align:center;letter-spacing:2px;">
+            ▶  START METING
+        </button>
+        <!-- STOP + RESET: altijd zichtbaar, wist de sessie -->
+        <button onclick="stopAndReset()"
+                style="display:block;width:100%;background:rgba(255,68,68,0.08);border:1px solid var(--danger-red);color:var(--danger-red);font-family:var(--font-mono);font-size:0.68rem;font-weight:bold;padding:10px;cursor:pointer;text-transform:uppercase;border-radius:3px;text-align:center;letter-spacing:1px;margin-top:6px;">
+            ■  STOP &amp; RESET
+        </button>
+
+        <!-- Dag totaal -->
+        <div class="card green-accent" style="margin-top:4px;">
+            <span class="c-label">Dag Totaal — <span id="date-display" style="color:#555;font-size:0.55rem;text-transform:none;">--</span></span>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin:6px 0 4px;">
+                <div id="day-steps" style="font-size:2.2rem;font-weight:bold;font-variant-numeric:tabular-nums;color:var(--glow-green);line-height:1;">0</div>
+                <div id="day-dist"  style="font-size:0.9rem;color:var(--accent-gold);font-weight:bold;">0 m</div>
+                <div id="day-kcal" style="font-size:0.9rem;color:#ff6b6b;font-weight:bold;">0 kcal</div>
+                <div id="day-goal-pct" style="font-size:1.1rem;font-weight:bold;">0%</div>
+            </div>
+            <div style="background:#111;height:6px;border-radius:3px;overflow:hidden;">
+                <div id="day-goal-bar" style="height:100%;width:0%;background:var(--glow-green);border-radius:3px;transition:width 0.5s;"></div>
+            </div>
+            <div style="font-size:0.52rem;color:#333;margin-top:3px;">Doel: 10.000 stappen</div>
+        </div>
+
+        <!-- UTC / Lokaal -->
+        <div class="grid-2">
+            <div class="card" style="border-left:2px solid #222;">
+                <span class="c-label" style="color:#444;">UTC</span>
+                <div id="utc-time" class="c-value-md" style="color:#555;">--:--:--</div>
+            </div>
+            <div class="card green-accent">
+                <span class="c-label">Lokaal</span>
+                <div id="local-time" class="c-value-md">--:--:--</div>
+            </div>
+        </div>
+
+    </section>
+
+    <!-- LOG -->
+    <section id="view-log" class="instrument-panel log-panel">
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:6px;flex-shrink:0;">
+            <span class="c-label" style="margin:0;">Dag Geschiedenis</span>
+            <button onclick="resetDay()"
+                    style="background:rgba(255,68,68,0.1);border:1px solid var(--danger-red);color:var(--danger-red);font-family:var(--font-mono);font-size:0.52rem;padding:3px 7px;border-radius:2px;cursor:pointer;text-transform:uppercase;">
+                Reset Dag
+            </button>
+        </div>
+        <div class="log-scroll-wrap">
+            <div class="log-table-wrap">
+                <table>
+                    <thead><tr><th>Datum</th><th>Stappen</th><th>Afstand</th><th>Doel</th></tr></thead>
+                    <tbody id="log-body">
+                        <tr><td colspan="4" style="text-align:center;color:#333;padding:16px;">Nog geen historische data</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- CONFIG -->
+    <section id="view-config" class="instrument-panel" style="gap:10px;">
+        <span class="c-label" style="font-size:0.72rem;letter-spacing:2px;">INSTELLINGEN</span>
+
+        <div class="cfg-section-title">Achtergrond-GPS Status</div>
+        <div class="cfg-info-box">
+            <div class="cfg-row"><span class="cfg-key">Wake Lock</span>       <span class="cfg-val" id="cfg-wake-status">Controleren...</span></div>
+            <div class="cfg-row"><span class="cfg-key">Audio keepalive</span> <span class="cfg-val" id="audio-status-cfg">Inactief (start meting)</span></div>
+            <div class="cfg-row"><span class="cfg-key">SW GPS cache</span>    <span class="cfg-val green">Actief</span></div>
+            <div class="cfg-row"><span class="cfg-key">Zwarte doos</span>     <span class="cfg-val green">Actief (elke 3s)</span></div>
+            <div class="cfg-row"><span class="cfg-key">Crow-flies herstel</span><span class="cfg-val gold">Actief bij heropen</span></div>
+        </div>
+
+        <div class="cfg-section-title mt-8">Meting Instellen</div>
+        <div class="cfg-info-box">
+            <div class="cfg-row"><span class="cfg-key">Staplengte</span><span class="cfg-val gold" id="cfg-step-len-display">0.67m</span></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;">
+            <div>
+                <div style="font-size:0.55rem;color:#555;text-transform:uppercase;margin-bottom:4px;">Staplengte (m)</div>
+                <input type="number" id="cfg-step-len-input" value="0.67" min="0.30" max="1.20" step="0.01"
+                       style="width:100%;background:#111;border:1px solid #333;color:var(--accent-gold);font-family:var(--font-mono);font-size:0.9rem;padding:10px;border-radius:2px;text-align:center;">
+            </div>
+            <div>
+                <div style="font-size:0.55rem;color:#555;text-transform:uppercase;margin-bottom:4px;">Gewicht (kg)</div>
+                <input type="number" id="cfg-weight-input" value="75" min="30" max="250" step="1"
+                       style="width:100%;background:#111;border:1px solid #333;color:#ff6b6b;font-family:var(--font-mono);font-size:0.9rem;padding:10px;border-radius:2px;text-align:center;">
+            </div>
+        </div>
+        <button class="cfg-btn" onclick="saveConfig()" style="margin-top:6px;">OPSLAAN</button>
+        <div id="cfg-step-status" class="cfg-status pending" style="display:none;"></div>
+
+        <div class="card" style="font-size:0.56rem;color:#2a2a2a;line-height:1.75;padding:8px 12px;border-color:#111;margin-top:4px;">
+            v5.0: stappen via GPS Doppler-snelheid (pos.coords.speed) — zelfde methode als WaypointAssistent. Calorieën via ACSM-formule met MET-tabel.
+        </div>
+    </section>
+
+    <!-- INFO -->
+    <section id="view-info" class="instrument-panel" style="gap:10px;">
+        <div class="info-lang-toggle">
+            <button class="info-lang-btn active" onclick="setInfoLang('nl',this)">NL</button>
+            <button class="info-lang-btn"        onclick="setInfoLang('en',this)">EN</button>
+        </div>
+        <div id="info-nl" class="info-block active">
+            <div class="info-version-bar"><span>Stappenteller — Cockpit</span><strong>v2.0</strong></div>
+            <div class="info-section">
+                <h3>Drie lagen van achtergrond-continuiteit</h3>
+                <p><strong style="color:var(--accent-gold)">Audio Keepalive:</strong> speelt een onhoorbare 1s WAV-loop via Web Audio API. MediaSession API vertelt Android dat er media speelt. Chrome wordt behandeld als Spotify: hoge processprioriteit, zelden door Android gedood. Werkt zolang het scherm open is.</p>
+                <p><strong style="color:var(--glow-green)">Crow-flies Re-sync:</strong> bij heropen berekent de app via Haversine de vogelvlucht-afstand tussen het punt van dichtklappen en het punt van heropen. Dit wordt toegevoegd als geschat segment (oranje ~GAP indicator). Nauwkeurig genoeg voor een stappenteller over korte slaapperiodes.</p>
+                <p><strong style="color:var(--home-blue)">Zwarte Doos:</strong> elke 3 seconden schrijft de app een snapshot van de actieve sessie naar localStorage. Bij crash of gedwongen afsluiten door Android leest de app de snapshot bij herstart en hervat automatisch. Je verliest nooit meer dan 3 seconden data.</p>
+            </div>
+            <div class="info-section" style="border-left-color:#333;">
+                <h3>Eerlijke grens</h3>
+                <p>Voor continue GPS-meting bij een dichtgeklapt scherm zonder onderbreking is een native Android-app met een Foreground Service de enige betrouwbare oplossing. De technieken hier zijn de best haalbare voor een browser-PWA.</p>
+            </div>
+        </div>
+        <div id="info-en" class="info-block">
+            <div class="info-version-bar"><span>Step Counter — Cockpit</span><strong>v2.0</strong></div>
+            <div class="info-section">
+                <h3>Three layers of background continuity</h3>
+                <p><strong style="color:var(--accent-gold)">Audio Keepalive:</strong> plays an inaudible 1s WAV loop via Web Audio API. The MediaSession API tells Android that media is playing. Chrome is treated like Spotify: high process priority, rarely killed. Works while the screen is open.</p>
+                <p><strong style="color:var(--glow-green)">Crow-flies Re-sync:</strong> on re-open, the app calculates the straight-line distance between the closing and opening coordinates via Haversine, added as an estimated segment (orange ~GAP indicator). Accurate enough for a step counter over short sleep periods.</p>
+                <p><strong style="color:var(--home-blue)">Black Box:</strong> every 3 seconds the app writes a session snapshot to localStorage. On crash or forced close by Android, the snapshot is read on restart and the session resumes automatically. You never lose more than 3 seconds of data.</p>
+            </div>
+            <div class="info-section" style="border-left-color:#333;">
+                <h3>Honest limitation</h3>
+                <p>For continuous GPS tracking with screen closed without interruption, a native Android app with a Foreground Service is the only reliable solution. The techniques here represent the best achievable for a browser PWA.</p>
+            </div>
+        </div>
+    </section>
+
+</main>
+
+<nav class="cockpit-nav">
+    <div class="nav-item active" onclick="showView('home',   this)"><span class="nav-icon">&#128062;</span><span>Stappen</span></div>
+    <div class="nav-item"        onclick="showView('log',    this)"><span class="nav-icon">&#128202;</span><span>Log</span></div>
+    <div class="nav-item"        onclick="showView('config', this)"><span class="nav-icon">&#9881;&#65039;</span><span>Config</span></div>
+    <div class="nav-item"        onclick="showView('info',   this)"><span class="nav-icon">&#8505;&#65039;</span><span>Info</span></div>
+</nav>
+
+<script src="app.js"></script>
+<script src="logic.js"></script>
+
+</body>
+</html>
