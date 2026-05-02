@@ -20,7 +20,7 @@
 
    FILTERS:
      1. GPS-accuratesse > 20m        → negeer fix
-     2. GPS-snelheid < 2.5 km/u     → stilstand, geen stappen
+     2. GPS-snelheid < 1.25 km/u     → stilstand, geen stappen
      3. GPS-snelheid > 7.0 km/u     → te snel voor wandelen
      4. moveSeconds > 3             → wacht 3s voor lopende state
         (voorkomt tellen bij onechte GPS-snelheidspieken bij start)
@@ -42,7 +42,7 @@ const DEFAULT_STEP_M   = 0.67;   /* staplengte in meter                     */
 const DEFAULT_WEIGHT   = 75;     /* lichaamsgewicht in kg                   */
 
 /* Snelheidsvenster — identiek aan WaypointAssistent wandelen-profiel */
-const MIN_SPEED_KMH    = 0.37;    /* onder = stilstand                       */
+const MIN_SPEED_KMH    = 1.25;    /* onder = stilstand                       */
 const MAX_SPEED_KMH    = 7.0;    /* boven = geen wandelaar meer             */
 const MIN_SPEED_MS     = MIN_SPEED_KMH / 3.6;
 const MAX_SPEED_MS     = MAX_SPEED_KMH / 3.6;
